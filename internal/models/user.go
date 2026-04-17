@@ -7,7 +7,6 @@ type User struct {
 	Email                 string    `gorm:"size:255;uniqueIndex;not null"`
 	Role                  string    `gorm:"size:32;index;not null"`
 	Provider              string    `gorm:"size:32;not null;default:google"`
-	IsMock                bool      `gorm:"default:true"`
 	PhoneNumber           string    `gorm:"size:64"`
 	StoreName             string    `gorm:"size:255"`
 	SavedCardHolderName   string    `gorm:"size:255"`

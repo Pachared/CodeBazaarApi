@@ -12,13 +12,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	defaultBuyerID     = "usr_buyer_demo"
-	defaultBuyerEmail  = "buyer.demo@codebazaar.local"
-	defaultSellerID    = "usr_seller_demo"
-	defaultSellerEmail = "seller.demo@codebazaar.local"
-)
-
 type UserRepository struct {
 	db *gorm.DB
 }
@@ -67,53 +60,6 @@ func (r *UserRepository) Save(user *models.User) error {
 	return r.db.Save(user).Error
 }
 
-func (r *UserRepository) FindOrCreateDemoBuyer(intent string) (*models.User, error) {
-	user := &models.User{
-		ID:                  defaultBuyerID,
-		Name:                "ผู้ซื้อทดลอง",
-		Email:               defaultBuyerEmail,
-		Role:                "buyer",
-		Provider:            "google",
-		IsMock:              true,
-		PhoneNumber:         "0812345678",
-		SavedCardHolderName: "Pachara Demo",
-		SavedCardNumber:     "4111 1111 1111 1111",
-		SavedCardExpiry:     "12/28",
-		NotifyOrders:        true,
-		NotifyMarketplace:   true,
-	}
-
-	if intent == "register" {
-		user.Name = "สมาชิกทดลอง CodeBazaar"
-	}
-
-	return r.firstOrCreateByEmail(user)
-}
-
-func (r *UserRepository) FindOrCreateDemoSeller() (*models.User, error) {
-	user := &models.User{
-		ID:                    defaultSellerID,
-		Slug:                  "codebazaar-seller-demo",
-		Name:                  "CodeBazaar Seller Demo",
-		Email:                 defaultSellerEmail,
-		Role:                  "seller",
-		Provider:              "github",
-		IsMock:                true,
-		PhoneNumber:           "0898765432",
-		StoreName:             "CodeBazaar Seller Demo",
-		BankName:              "ธนาคารกสิกรไทย",
-		BankAccountNumber:     "123-4-56789-0",
-		BankBookImageName:     "bank-book-demo.png",
-		BankBookImageURL:      "https://example.com/bank-book-demo.png",
-		IdentityCardImageName: "identity-card-demo.png",
-		IdentityCardImageURL:  "https://example.com/identity-card-demo.png",
-		NotifyOrders:          true,
-		NotifyMarketplace:     true,
-	}
-
-	return r.firstOrCreateByEmail(user)
-}
-
 func (r *UserRepository) FindOrCreateExternalUser(
 	userID string,
 	email string,
@@ -136,16 +82,22 @@ func (r *UserRepository) FindOrCreateExternalUser(
 	}
 
 	if existingUser != nil {
-		existingUser.ID = coalesceString(normalizedID, existingUser.ID)
 		existingUser.Name = coalesceString(strings.TrimSpace(name), existingUser.Name)
 		existingUser.Email = coalesceString(normalizedEmail, existingUser.Email)
-		existingUser.Provider = coalesceString(normalizedProvider, existingUser.Provider)
-		existingUser.Role = coalesceString(normalizedRole, existingUser.Role)
-		existingUser.IsMock = false
+		existingUser.Provider = mergeProvider(existingUser.Provider, normalizedProvider)
+		existingUser.Role = mergeRole(existingUser.Role, normalizedRole)
 
 		if existingUser.Role == "seller" {
-			existingUser.Slug = coalesceString(existingUser.Slug, slugify(existingUser.Name))
-			existingUser.StoreName = coalesceString(existingUser.StoreName, existingUser.Name)
+			if strings.TrimSpace(existingUser.StoreName) == "" {
+				existingUser.StoreName = existingUser.Name
+			}
+			if strings.TrimSpace(existingUser.Slug) == "" {
+				slug, slugErr := r.uniqueSlug(existingUser.Name, existingUser.ID)
+				if slugErr != nil {
+					return nil, slugErr
+				}
+				existingUser.Slug = slug
+			}
 		}
 
 		if err := r.db.Save(existingUser).Error; err != nil {
@@ -166,13 +118,16 @@ func (r *UserRepository) FindOrCreateExternalUser(
 		Email:             normalizedEmail,
 		Role:              normalizedRole,
 		Provider:          normalizedProvider,
-		IsMock:            false,
 		NotifyOrders:      true,
 		NotifyMarketplace: true,
 	}
 
 	if user.Role == "seller" {
-		user.Slug = slugify(displayName)
+		slug, slugErr := r.uniqueSlug(displayName, "")
+		if slugErr != nil {
+			return nil, slugErr
+		}
+		user.Slug = slug
 		user.StoreName = displayName
 	}
 
@@ -182,82 +137,152 @@ func (r *UserRepository) FindOrCreateExternalUser(
 func (r *UserRepository) FindOrCreateBuyerByEmail(name string, email string, phone string) (*models.User, error) {
 	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
 	if normalizedEmail == "" {
-		return r.FindOrCreateDemoBuyer("login")
+		return nil, errors.New("buyer email is required")
+	}
+
+	existingUser, err := r.GetByEmail(normalizedEmail)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	if existingUser != nil {
+		existingUser.Name = coalesceString(strings.TrimSpace(name), existingUser.Name)
+		existingUser.PhoneNumber = coalesceString(strings.TrimSpace(phone), existingUser.PhoneNumber)
+		existingUser.Provider = mergeProvider(existingUser.Provider, "guest")
+		existingUser.Role = mergeRole(existingUser.Role, "buyer")
+
+		if err := r.db.Save(existingUser).Error; err != nil {
+			return nil, err
+		}
+
+		return existingUser, nil
 	}
 
 	user := &models.User{
 		ID:                createRepositoryID("usr_buyer"),
-		Name:              strings.TrimSpace(name),
+		Name:              coalesceString(strings.TrimSpace(name), "ผู้ซื้อ CodeBazaar"),
 		Email:             normalizedEmail,
 		Role:              "buyer",
-		Provider:          "google",
-		IsMock:            true,
+		Provider:          "guest",
 		PhoneNumber:       strings.TrimSpace(phone),
 		NotifyOrders:      true,
 		NotifyMarketplace: true,
 	}
 
-	if user.Name == "" {
-		user.Name = "ผู้ซื้อ CodeBazaar"
-	}
-
-	return r.firstOrCreateByEmail(user)
+	return r.dbSaveAndReturn(user)
 }
 
-func (r *UserRepository) ResolveOrDefaultBuyer(currentUser *models.User) (*models.User, error) {
-	if currentUser != nil {
-		return currentUser, nil
+func (r *UserRepository) EnsureSellerAccount(currentUser *models.User) (*models.User, error) {
+	if currentUser == nil || strings.TrimSpace(currentUser.ID) == "" {
+		return nil, gorm.ErrRecordNotFound
 	}
 
-	return r.FindOrCreateDemoBuyer("login")
-}
-
-func (r *UserRepository) ResolveOrDefaultSeller(currentUser *models.User) (*models.User, error) {
-	if currentUser != nil && currentUser.Role == "seller" {
-		return currentUser, nil
+	user, err := r.GetByIDOrEmail(currentUser.ID, currentUser.Email)
+	if err != nil {
+		return nil, err
 	}
 
-	return r.FindOrCreateDemoSeller()
+	user.Role = "seller"
+	if strings.TrimSpace(user.StoreName) == "" {
+		user.StoreName = user.Name
+	}
+	if strings.TrimSpace(user.Slug) == "" {
+		slug, slugErr := r.uniqueSlug(user.Name, user.ID)
+		if slugErr != nil {
+			return nil, slugErr
+		}
+		user.Slug = slug
+	}
+
+	if err := r.db.Save(user).Error; err != nil {
+		return nil, err
+	}
+
+	return user, nil
 }
 
-func (r *UserRepository) firstOrCreateByEmail(seed *models.User) (*models.User, error) {
-	var user models.User
-	err := r.db.First(&user, "email = ?", strings.TrimSpace(strings.ToLower(seed.Email))).Error
+func (r *UserRepository) firstOrCreateByEmail(user *models.User) (*models.User, error) {
+	normalizedEmail := strings.TrimSpace(strings.ToLower(user.Email))
+	if normalizedEmail == "" {
+		return nil, errors.New("user email is required")
+	}
+
+	var existing models.User
+	err := r.db.First(&existing, "email = ?", normalizedEmail).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if err := r.db.Create(seed).Error; err != nil {
-				return nil, err
-			}
-			return seed, nil
+			user.Email = normalizedEmail
+			return r.dbSaveAndReturn(user)
 		}
 
 		return nil, err
 	}
 
-	user.Name = coalesceString(seed.Name, user.Name)
-	user.Role = coalesceString(seed.Role, user.Role)
-	user.Provider = coalesceString(seed.Provider, user.Provider)
-	user.IsMock = seed.IsMock
-	user.Slug = coalesceString(seed.Slug, user.Slug)
-	user.PhoneNumber = coalesceString(seed.PhoneNumber, user.PhoneNumber)
-	user.StoreName = coalesceString(seed.StoreName, user.StoreName)
-	user.SavedCardHolderName = coalesceString(seed.SavedCardHolderName, user.SavedCardHolderName)
-	user.SavedCardNumber = coalesceString(seed.SavedCardNumber, user.SavedCardNumber)
-	user.SavedCardExpiry = coalesceString(seed.SavedCardExpiry, user.SavedCardExpiry)
-	user.BankName = coalesceString(seed.BankName, user.BankName)
-	user.BankAccountNumber = coalesceString(seed.BankAccountNumber, user.BankAccountNumber)
-	user.BankBookImageName = coalesceString(seed.BankBookImageName, user.BankBookImageName)
-	user.BankBookImageURL = coalesceString(seed.BankBookImageURL, user.BankBookImageURL)
-	user.IdentityCardImageName = coalesceString(seed.IdentityCardImageName, user.IdentityCardImageName)
-	user.IdentityCardImageURL = coalesceString(seed.IdentityCardImageURL, user.IdentityCardImageURL)
-	user.NotifyOrders = seed.NotifyOrders
-	user.NotifyMarketplace = seed.NotifyMarketplace
+	existing.Name = coalesceString(user.Name, existing.Name)
+	existing.Email = normalizedEmail
+	existing.Role = mergeRole(existing.Role, user.Role)
+	existing.Provider = mergeProvider(existing.Provider, user.Provider)
+	existing.PhoneNumber = coalesceString(user.PhoneNumber, existing.PhoneNumber)
+	existing.StoreName = coalesceString(user.StoreName, existing.StoreName)
+	existing.SavedCardHolderName = coalesceString(user.SavedCardHolderName, existing.SavedCardHolderName)
+	existing.SavedCardNumber = coalesceString(user.SavedCardNumber, existing.SavedCardNumber)
+	existing.SavedCardExpiry = coalesceString(user.SavedCardExpiry, existing.SavedCardExpiry)
+	existing.BankName = coalesceString(user.BankName, existing.BankName)
+	existing.BankAccountNumber = coalesceString(user.BankAccountNumber, existing.BankAccountNumber)
+	existing.BankBookImageName = coalesceString(user.BankBookImageName, existing.BankBookImageName)
+	existing.BankBookImageURL = coalesceString(user.BankBookImageURL, existing.BankBookImageURL)
+	existing.IdentityCardImageName = coalesceString(user.IdentityCardImageName, existing.IdentityCardImageName)
+	existing.IdentityCardImageURL = coalesceString(user.IdentityCardImageURL, existing.IdentityCardImageURL)
+	existing.NotifyOrders = user.NotifyOrders
+	existing.NotifyMarketplace = user.NotifyMarketplace
 
-	if err := r.db.Save(&user).Error; err != nil {
+	if existing.Role == "seller" && strings.TrimSpace(existing.Slug) == "" {
+		slug, slugErr := r.uniqueSlug(coalesceString(existing.StoreName, existing.Name), existing.ID)
+		if slugErr != nil {
+			return nil, slugErr
+		}
+		existing.Slug = slug
+	}
+
+	if err := r.db.Save(&existing).Error; err != nil {
 		return nil, err
 	}
 
-	return &user, nil
+	return &existing, nil
+}
+
+func (r *UserRepository) dbSaveAndReturn(user *models.User) (*models.User, error) {
+	if err := r.db.Create(user).Error; err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (r *UserRepository) uniqueSlug(base string, excludeUserID string) (string, error) {
+	candidate := slugify(base)
+	if candidate == "" {
+		candidate = fmt.Sprintf("seller-%d", time.Now().Unix())
+	}
+
+	currentCandidate := candidate
+	for suffix := 1; ; suffix++ {
+		var count int64
+		query := r.db.Model(&models.User{}).Where("slug = ?", currentCandidate)
+		if strings.TrimSpace(excludeUserID) != "" {
+			query = query.Where("id <> ?", strings.TrimSpace(excludeUserID))
+		}
+
+		if err := query.Count(&count).Error; err != nil {
+			return "", err
+		}
+
+		if count == 0 {
+			return currentCandidate, nil
+		}
+
+		currentCandidate = fmt.Sprintf("%s-%d", candidate, suffix+1)
+	}
 }
 
 func coalesceString(next string, fallback string) string {
@@ -315,6 +340,38 @@ func resolveRole(role string, provider string) string {
 	}
 
 	return "buyer"
+}
+
+func mergeRole(existing string, next string) string {
+	normalizedExisting := strings.TrimSpace(strings.ToLower(existing))
+	normalizedNext := strings.TrimSpace(strings.ToLower(next))
+
+	switch {
+	case normalizedNext == "":
+		return existing
+	case normalizedExisting == "":
+		return normalizedNext
+	case normalizedExisting == "seller" && normalizedNext == "buyer":
+		return normalizedExisting
+	default:
+		return normalizedNext
+	}
+}
+
+func mergeProvider(existing string, next string) string {
+	normalizedExisting := strings.TrimSpace(strings.ToLower(existing))
+	normalizedNext := strings.TrimSpace(strings.ToLower(next))
+
+	switch {
+	case normalizedNext == "":
+		return existing
+	case normalizedExisting == "":
+		return normalizedNext
+	case normalizedNext == "guest":
+		return normalizedExisting
+	default:
+		return normalizedNext
+	}
 }
 
 func slugify(value string) string {

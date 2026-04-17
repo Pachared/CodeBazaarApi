@@ -1,10 +1,12 @@
 package contracts
 
 type AuthActionResponse struct {
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	RedirectURL string           `json:"redirectUrl,omitempty"`
-	Session     *AuthSessionUser `json:"session,omitempty"`
+	Title            string           `json:"title"`
+	Description      string           `json:"description"`
+	RedirectURL      string           `json:"redirectUrl,omitempty"`
+	Session          *AuthSessionUser `json:"session,omitempty"`
+	SessionToken     string           `json:"sessionToken,omitempty"`
+	SessionExpiresAt string           `json:"sessionExpiresAt,omitempty"`
 }
 
 type AuthProfileFields struct {
@@ -29,12 +31,7 @@ type AuthSessionUser struct {
 	Email    string `json:"email"`
 	Role     string `json:"role"`
 	Provider string `json:"provider"`
-	IsMock   bool   `json:"isMock"`
 	AuthProfileFields
-}
-
-type AuthStartRequest struct {
-	Intent string `json:"intent" binding:"required,oneof=login register"`
 }
 
 type GoogleSessionExchangeRequest struct {

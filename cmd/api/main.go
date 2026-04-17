@@ -8,8 +8,8 @@ import (
 	"github.com/Pachared/CodeBazaarApi/internal/handlers"
 	"github.com/Pachared/CodeBazaarApi/internal/repositories"
 	"github.com/Pachared/CodeBazaarApi/internal/routes"
-	"github.com/Pachared/CodeBazaarApi/internal/seed"
 	"github.com/Pachared/CodeBazaarApi/internal/services"
+	"github.com/Pachared/CodeBazaarApi/internal/session"
 )
 
 func main() {
@@ -26,10 +26,9 @@ func main() {
 		}
 	}
 
-	if cfg.AutoSeed {
-		if err := seed.Seed(db); err != nil {
-			log.Fatalf("database seeding failed: %v", err)
-		}
+	sessionManager, err := session.NewManager(cfg.SessionSecret, cfg.SessionTTL)
+	if err != nil {
+		log.Fatalf("session manager setup failed: %v", err)
 	}
 
 	userRepository := repositories.NewUserRepository(db)
@@ -37,7 +36,7 @@ func main() {
 	orderRepository := repositories.NewOrderRepository(db)
 	cookieConsentRepository := repositories.NewCookieConsentRepository(db)
 
-	authService := services.NewAuthService(userRepository)
+	authService := services.NewAuthService(userRepository, sessionManager)
 	catalogService := services.NewCatalogService(productRepository)
 	checkoutService := services.NewCheckoutService(db, userRepository, productRepository, orderRepository)
 	sellerService := services.NewSellerService(userRepository, productRepository, orderRepository)
@@ -57,6 +56,7 @@ func main() {
 	router := routes.New(
 		cfg,
 		userRepository,
+		sessionManager,
 		authHandler,
 		productHandler,
 		checkoutHandler,

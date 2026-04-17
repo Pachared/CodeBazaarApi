@@ -2,9 +2,11 @@ package services
 
 import (
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/Pachared/CodeBazaarApi/internal/contracts"
+	"github.com/Pachared/CodeBazaarApi/internal/httpx"
 	"github.com/Pachared/CodeBazaarApi/internal/models"
 	"github.com/Pachared/CodeBazaarApi/internal/repositories"
 	"gorm.io/gorm"
@@ -45,7 +47,7 @@ func (s *CookieService) SaveConsent(
 		userID = currentUser.ID
 	}
 	if userID == "" && sessionKey == "" {
-		sessionKey = "anonymous-demo"
+		return nil, httpx.NewAppError(http.StatusBadRequest, "กรุณาส่ง session key หรือเข้าสู่ระบบก่อนบันทึก cookie consent")
 	}
 
 	existing, _ := s.cookieConsentRepository.GetByUserIDOrSession(userID, sessionKey)

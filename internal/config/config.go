@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -15,9 +16,10 @@ type Config struct {
 	DBPassword     string
 	DBName         string
 	DBSSLMode      string
+	SessionSecret  string
+	SessionTTL     time.Duration
 	AllowedOrigins []string
 	AutoMigrate    bool
-	AutoSeed       bool
 }
 
 func Load() Config {
@@ -31,9 +33,10 @@ func Load() Config {
 		DBPassword:     getEnv("DB_PASSWORD", "codebazaar"),
 		DBName:         getEnv("DB_NAME", "codebazaar"),
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
+		SessionSecret:  getEnv("SESSION_SECRET", "change-me-before-production"),
+		SessionTTL:     getDurationEnv("SESSION_TTL", 7*24*time.Hour),
 		AllowedOrigins: getOrigins(),
 		AutoMigrate:    getBoolEnv("AUTO_MIGRATE", true),
-		AutoSeed:       getBoolEnv("AUTO_SEED", true),
 	}
 }
 
@@ -67,6 +70,20 @@ func getBoolEnv(key string, fallback bool) bool {
 	}
 
 	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
+
+func getDurationEnv(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+
+	return duration
 }
 
 func getOrigins() []string {

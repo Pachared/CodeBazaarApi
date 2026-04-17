@@ -18,19 +18,7 @@ func NewAuthHandler(authService *services.AuthService) *AuthHandler {
 }
 
 func (h *AuthHandler) StartGoogleAuth(c *gin.Context) {
-	var request contracts.AuthStartRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		httpx.Fail(c, httpx.NewAppError(http.StatusBadRequest, "รูปแบบข้อมูลเข้าสู่ระบบไม่ถูกต้อง"))
-		return
-	}
-
-	response, err := h.authService.StartGoogleAuth(request.Intent)
-	if err != nil {
-		httpx.Fail(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
+	httpx.Fail(c, httpx.NewAppError(http.StatusGone, "route นี้ถูกปิดแล้ว กรุณาใช้ Google sign-in ฝั่ง client แล้วส่ง access token มาที่ /auth/google/session"))
 }
 
 func (h *AuthHandler) ExchangeGoogleSession(c *gin.Context) {

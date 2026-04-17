@@ -28,21 +28,26 @@ func NewSellerService(
 	}
 }
 
-func (s *SellerService) OpenSellerAccount() (*contracts.AuthActionResponse, error) {
-	user, err := s.userRepository.FindOrCreateDemoSeller()
+func (s *SellerService) OpenSellerAccount(currentUser *models.User) (*contracts.AuthActionResponse, error) {
+	user, err := requireCurrentUser(currentUser)
+	if err != nil {
+		return nil, err
+	}
+
+	seller, err := s.userRepository.EnsureSellerAccount(user)
 	if err != nil {
 		return nil, err
 	}
 
 	return &contracts.AuthActionResponse{
 		Title:       "เปิดบัญชีผู้ขายสำเร็จ",
-		Description: "เชื่อมบัญชีผู้ขายทดลองด้วย GitHub เรียบร้อยแล้ว และพร้อมใช้งาน Seller Studio ต่อได้ทันที",
-		Session:     toAuthSessionUser(user),
+		Description: "บัญชีของคุณถูกเปิดสิทธิ์ผู้ขายเรียบร้อยแล้ว และพร้อมใช้งาน Seller Studio ต่อได้ทันที",
+		Session:     toAuthSessionUser(seller),
 	}, nil
 }
 
 func (s *SellerService) SubmitListing(currentUser *models.User, input contracts.SellerListingRequest) (*contracts.SellerListingResponse, error) {
-	seller, err := s.userRepository.ResolveOrDefaultSeller(currentUser)
+	seller, err := requireSellerUser(currentUser)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +116,12 @@ func (s *SellerService) SubmitListing(currentUser *models.User, input contracts.
 }
 
 func (s *SellerService) ListSellerOrders(currentUser *models.User) ([]contracts.SellerOrderResponse, error) {
-	sellerID := ""
-	if currentUser != nil && currentUser.Role == "seller" {
-		sellerID = currentUser.ID
+	seller, err := requireSellerUser(currentUser)
+	if err != nil {
+		return nil, err
 	}
 
-	rows, err := s.orderRepository.ListSellerOrders(sellerID)
+	rows, err := s.orderRepository.ListSellerOrders(seller.ID)
 	if err != nil {
 		return nil, err
 	}

@@ -7,12 +7,14 @@ import (
 	"github.com/Pachared/CodeBazaarApi/internal/handlers"
 	"github.com/Pachared/CodeBazaarApi/internal/middleware"
 	"github.com/Pachared/CodeBazaarApi/internal/repositories"
+	"github.com/Pachared/CodeBazaarApi/internal/session"
 	"github.com/gin-gonic/gin"
 )
 
 func New(
 	cfg config.Config,
 	userRepository *repositories.UserRepository,
+	sessionManager *session.Manager,
 	authHandler *handlers.AuthHandler,
 	productHandler *handlers.ProductHandler,
 	checkoutHandler *handlers.CheckoutHandler,
@@ -26,7 +28,7 @@ func New(
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(middleware.CORS(cfg.AllowedOrigins))
-	router.Use(middleware.CurrentUser(userRepository))
+	router.Use(middleware.CurrentUser(userRepository, sessionManager))
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

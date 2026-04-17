@@ -15,7 +15,7 @@ func NewProfileService(userRepository *repositories.UserRepository) *ProfileServ
 }
 
 func (s *ProfileService) GetProfile(currentUser *models.User) (*contracts.AuthSessionUser, error) {
-	user, err := s.userRepository.ResolveOrDefaultBuyer(currentUser)
+	user, err := requireCurrentUser(currentUser)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (s *ProfileService) GetProfile(currentUser *models.User) (*contracts.AuthSe
 }
 
 func (s *ProfileService) UpdateProfile(currentUser *models.User, input contracts.ProfileUpdateRequest) (*contracts.AuthSessionUser, error) {
-	user, err := s.userRepository.ResolveOrDefaultBuyer(currentUser)
+	user, err := requireCurrentUser(currentUser)
 	if err != nil {
 		return nil, err
 	}

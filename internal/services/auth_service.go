@@ -9,6 +9,7 @@ import (
 	"github.com/Pachared/CodeBazaarApi/internal/contracts"
 	"github.com/Pachared/CodeBazaarApi/internal/httpx"
 	"github.com/Pachared/CodeBazaarApi/internal/repositories"
+	"github.com/Pachared/CodeBazaarApi/internal/session"
 )
 
 const googleUserInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -23,35 +24,17 @@ type googleUserInfoResponse struct {
 type AuthService struct {
 	userRepository *repositories.UserRepository
 	httpClient     *http.Client
+	sessionManager *session.Manager
 }
 
-func NewAuthService(userRepository *repositories.UserRepository) *AuthService {
+func NewAuthService(userRepository *repositories.UserRepository, sessionManager *session.Manager) *AuthService {
 	return &AuthService{
 		userRepository: userRepository,
+		sessionManager: sessionManager,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
-}
-
-func (s *AuthService) StartGoogleAuth(intent string) (*contracts.AuthActionResponse, error) {
-	user, err := s.userRepository.FindOrCreateDemoBuyer(intent)
-	if err != nil {
-		return nil, err
-	}
-
-	title := "เข้าสู่ระบบสำเร็จ"
-	description := "คุณกำลังใช้งานบัญชีทดลองสำหรับทดสอบการเชื่อมต่อกับ API จริง"
-	if intent == "register" {
-		title = "สมัครสมาชิกสำเร็จ"
-		description = "สร้างบัญชีผู้ใช้ทดลองเรียบร้อยแล้ว และพร้อมใช้งาน flow ฝั่งผู้ซื้อได้ทันที"
-	}
-
-	return &contracts.AuthActionResponse{
-		Title:       title,
-		Description: description,
-		Session:     toAuthSessionUser(user),
-	}, nil
 }
 
 func (s *AuthService) ExchangeGoogleSession(accessToken string, intent string) (*contracts.AuthActionResponse, error) {
@@ -104,6 +87,11 @@ func (s *AuthService) ExchangeGoogleSession(accessToken string, intent string) (
 		return nil, err
 	}
 
+	sessionToken, expiresAt, err := s.sessionManager.Sign(user)
+	if err != nil {
+		return nil, err
+	}
+
 	title := "เข้าสู่ระบบสำเร็จ"
 	description := "บัญชี Google ของคุณถูกเชื่อมเข้ากับ CodeBazaar เรียบร้อยแล้ว"
 	if intent == "register" {
@@ -112,8 +100,10 @@ func (s *AuthService) ExchangeGoogleSession(accessToken string, intent string) (
 	}
 
 	return &contracts.AuthActionResponse{
-		Title:       title,
-		Description: description,
-		Session:     toAuthSessionUser(user),
+		Title:            title,
+		Description:      description,
+		Session:          toAuthSessionUser(user),
+		SessionToken:     sessionToken,
+		SessionExpiresAt: expiresAt.Format(time.RFC3339),
 	}, nil
 }

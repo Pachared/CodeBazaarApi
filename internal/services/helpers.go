@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/Pachared/CodeBazaarApi/internal/contracts"
+	"github.com/Pachared/CodeBazaarApi/internal/httpx"
 	"github.com/Pachared/CodeBazaarApi/internal/models"
 )
 
@@ -183,7 +185,6 @@ func toAuthSessionUser(user *models.User) *contracts.AuthSessionUser {
 		Email:    user.Email,
 		Role:     user.Role,
 		Provider: user.Provider,
-		IsMock:   user.IsMock,
 		AuthProfileFields: contracts.AuthProfileFields{
 			PhoneNumber:           user.PhoneNumber,
 			StoreName:             user.StoreName,
@@ -200,6 +201,27 @@ func toAuthSessionUser(user *models.User) *contracts.AuthSessionUser {
 			NotifyMarketplace:     user.NotifyMarketplace,
 		},
 	}
+}
+
+func requireCurrentUser(currentUser *models.User) (*models.User, error) {
+	if currentUser == nil || strings.TrimSpace(currentUser.ID) == "" {
+		return nil, httpx.NewAppError(http.StatusUnauthorized, "กรุณาเข้าสู่ระบบก่อนใช้งานส่วนนี้")
+	}
+
+	return currentUser, nil
+}
+
+func requireSellerUser(currentUser *models.User) (*models.User, error) {
+	user, err := requireCurrentUser(currentUser)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(strings.ToLower(user.Role)) != "seller" {
+		return nil, httpx.NewAppError(http.StatusForbidden, "บัญชีนี้ยังไม่ได้เปิดใช้งานสิทธิ์ผู้ขาย")
+	}
+
+	return user, nil
 }
 
 func toProductResponse(product models.Product) contracts.ProductResponse {

@@ -58,12 +58,13 @@ func (s *CheckoutService) SubmitOrder(currentUser *models.User, input contracts.
 		}
 	}
 
-	buyer, err := s.userRepository.FindOrCreateBuyerByEmail(input.CustomerName, input.CustomerEmail, input.CustomerPhone)
-	if err != nil {
-		return nil, err
-	}
-
-	if currentUser != nil && currentUser.ID != "" {
+	buyer := currentUser
+	if buyer == nil || buyer.ID == "" {
+		buyer, err = s.userRepository.FindOrCreateBuyerByEmail(input.CustomerName, input.CustomerEmail, input.CustomerPhone)
+		if err != nil {
+			return nil, err
+		}
+	} else {
 		buyer = currentUser
 	}
 

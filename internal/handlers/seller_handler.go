@@ -19,7 +19,7 @@ func NewSellerHandler(sellerService *services.SellerService) *SellerHandler {
 }
 
 func (h *SellerHandler) OpenSellerAccount(c *gin.Context) {
-	response, err := h.sellerService.OpenSellerAccount()
+	response, err := h.sellerService.OpenSellerAccount(middleware.GetCurrentUser(c))
 	if err != nil {
 		httpx.Fail(c, err)
 		return

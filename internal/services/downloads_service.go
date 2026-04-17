@@ -25,7 +25,7 @@ func NewDownloadsService(
 }
 
 func (s *DownloadsService) ListDownloads(currentUser *models.User) ([]contracts.DownloadLibraryItemResponse, error) {
-	user, err := s.userRepository.ResolveOrDefaultBuyer(currentUser)
+	user, err := requireCurrentUser(currentUser)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (s *DownloadsService) ListDownloads(currentUser *models.User) ([]contracts.
 }
 
 func (s *DownloadsService) MarkDownloaded(currentUser *models.User, libraryItemID string) (*contracts.MessageResponse, error) {
-	user, err := s.userRepository.ResolveOrDefaultBuyer(currentUser)
+	user, err := requireCurrentUser(currentUser)
 	if err != nil {
 		return nil, err
 	}
