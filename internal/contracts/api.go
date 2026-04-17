@@ -37,6 +37,11 @@ type AuthStartRequest struct {
 	Intent string `json:"intent" binding:"required,oneof=login register"`
 }
 
+type GoogleSessionExchangeRequest struct {
+	AccessToken string `json:"accessToken" binding:"required"`
+	Intent      string `json:"intent" binding:"omitempty,oneof=login register"`
+}
+
 type CartItem struct {
 	ID         string `json:"id" binding:"required"`
 	Title      string `json:"title" binding:"required"`

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -96,7 +97,7 @@ func (r *UserRepository) FindOrCreateDemoSeller() (*models.User, error) {
 		Name:                  "CodeBazaar Seller Demo",
 		Email:                 defaultSellerEmail,
 		Role:                  "seller",
-		Provider:              "google",
+		Provider:              "github",
 		IsMock:                true,
 		PhoneNumber:           "0898765432",
 		StoreName:             "CodeBazaar Seller Demo",
@@ -108,6 +109,71 @@ func (r *UserRepository) FindOrCreateDemoSeller() (*models.User, error) {
 		IdentityCardImageURL:  "https://example.com/identity-card-demo.png",
 		NotifyOrders:          true,
 		NotifyMarketplace:     true,
+	}
+
+	return r.firstOrCreateByEmail(user)
+}
+
+func (r *UserRepository) FindOrCreateExternalUser(
+	userID string,
+	email string,
+	name string,
+	provider string,
+	role string,
+) (*models.User, error) {
+	normalizedID := strings.TrimSpace(userID)
+	normalizedEmail := strings.TrimSpace(strings.ToLower(email))
+	normalizedProvider := resolveProvider(provider, normalizedID)
+	normalizedRole := resolveRole(role, normalizedProvider)
+
+	if normalizedID == "" && normalizedEmail == "" {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	existingUser, err := r.GetByIDOrEmail(normalizedID, normalizedEmail)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	if existingUser != nil {
+		existingUser.ID = coalesceString(normalizedID, existingUser.ID)
+		existingUser.Name = coalesceString(strings.TrimSpace(name), existingUser.Name)
+		existingUser.Email = coalesceString(normalizedEmail, existingUser.Email)
+		existingUser.Provider = coalesceString(normalizedProvider, existingUser.Provider)
+		existingUser.Role = coalesceString(normalizedRole, existingUser.Role)
+		existingUser.IsMock = false
+
+		if existingUser.Role == "seller" {
+			existingUser.Slug = coalesceString(existingUser.Slug, slugify(existingUser.Name))
+			existingUser.StoreName = coalesceString(existingUser.StoreName, existingUser.Name)
+		}
+
+		if err := r.db.Save(existingUser).Error; err != nil {
+			return nil, err
+		}
+
+		return existingUser, nil
+	}
+
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = deriveNameFromEmail(normalizedEmail, normalizedRole)
+	}
+
+	user := &models.User{
+		ID:                coalesceString(normalizedID, createRepositoryID("usr_external")),
+		Name:              displayName,
+		Email:             normalizedEmail,
+		Role:              normalizedRole,
+		Provider:          normalizedProvider,
+		IsMock:            false,
+		NotifyOrders:      true,
+		NotifyMarketplace: true,
+	}
+
+	if user.Role == "seller" {
+		user.Slug = slugify(displayName)
+		user.StoreName = displayName
 	}
 
 	return r.firstOrCreateByEmail(user)
@@ -200,6 +266,71 @@ func coalesceString(next string, fallback string) string {
 	}
 
 	return next
+}
+
+func deriveNameFromEmail(email string, role string) string {
+	prefix := strings.TrimSpace(strings.Split(strings.TrimSpace(email), "@")[0])
+	if prefix == "" {
+		if role == "seller" {
+			return "CodeBazaar Seller"
+		}
+		return "ผู้ใช้ CodeBazaar"
+	}
+
+	parts := strings.Fields(strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(prefix))
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func resolveProvider(provider string, userID string) string {
+	normalizedProvider := strings.TrimSpace(strings.ToLower(provider))
+	if normalizedProvider != "" {
+		return normalizedProvider
+	}
+
+	switch {
+	case strings.HasPrefix(strings.TrimSpace(userID), "github-"):
+		return "github"
+	case strings.HasPrefix(strings.TrimSpace(userID), "google-"):
+		return "google"
+	default:
+		return "google"
+	}
+}
+
+func resolveRole(role string, provider string) string {
+	normalizedRole := strings.TrimSpace(strings.ToLower(role))
+	if normalizedRole != "" {
+		return normalizedRole
+	}
+
+	if provider == "github" {
+		return "seller"
+	}
+
+	return "buyer"
+}
+
+func slugify(value string) string {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	normalized = strings.NewReplacer(".", "-", "_", "-", " ", "-").Replace(normalized)
+	normalized = strings.Join(strings.Fields(normalized), "-")
+	normalized = strings.Trim(normalized, "-")
+	for strings.Contains(normalized, "--") {
+		normalized = strings.ReplaceAll(normalized, "--", "-")
+	}
+
+	if normalized == "" {
+		return fmt.Sprintf("seller-%d", time.Now().Unix())
+	}
+
+	return normalized
 }
 
 func createRepositoryID(prefix string) string {

@@ -40,7 +40,7 @@ func Seed(db *gorm.DB) error {
 			Name:                  "CodeBazaar Seller Demo",
 			Email:                 "seller.demo@codebazaar.local",
 			Role:                  "seller",
-			Provider:              "google",
+			Provider:              "github",
 			IsMock:                true,
 			PhoneNumber:           "0898765432",
 			StoreName:             "CodeBazaar Seller Demo",

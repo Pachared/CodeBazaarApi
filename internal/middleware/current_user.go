@@ -16,6 +16,9 @@ func CurrentUser(userRepository *repositories.UserRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := strings.TrimSpace(c.GetHeader("X-User-ID"))
 		email := strings.TrimSpace(c.GetHeader("X-User-Email"))
+		name := strings.TrimSpace(c.GetHeader("X-User-Name"))
+		provider := strings.TrimSpace(c.GetHeader("X-User-Provider"))
+		role := strings.TrimSpace(c.GetHeader("X-User-Role"))
 
 		if userID == "" && email == "" {
 			c.Next()
@@ -26,6 +29,13 @@ func CurrentUser(userRepository *repositories.UserRepository) gin.HandlerFunc {
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			c.Next()
 			return
+		}
+
+		if user == nil && (userID != "" || email != "") {
+			createdUser, createErr := userRepository.FindOrCreateExternalUser(userID, email, name, provider, role)
+			if createErr == nil {
+				user = createdUser
+			}
 		}
 
 		if user != nil {

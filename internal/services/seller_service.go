@@ -36,7 +36,7 @@ func (s *SellerService) OpenSellerAccount() (*contracts.AuthActionResponse, erro
 
 	return &contracts.AuthActionResponse{
 		Title:       "เปิดบัญชีผู้ขายสำเร็จ",
-		Description: "เข้าสู่ระบบด้วยบัญชีผู้ขายทดลองเรียบร้อยแล้ว และพร้อมใช้งาน Seller Studio ต่อได้ทันที",
+		Description: "เชื่อมบัญชีผู้ขายทดลองด้วย GitHub เรียบร้อยแล้ว และพร้อมใช้งาน Seller Studio ต่อได้ทันที",
 		Session:     toAuthSessionUser(user),
 	}, nil
 }

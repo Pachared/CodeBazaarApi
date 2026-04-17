@@ -32,3 +32,19 @@ func (h *AuthHandler) StartGoogleAuth(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *AuthHandler) ExchangeGoogleSession(c *gin.Context) {
+	var request contracts.GoogleSessionExchangeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		httpx.Fail(c, httpx.NewAppError(http.StatusBadRequest, "ข้อมูล Google session ไม่ถูกต้อง"))
+		return
+	}
+
+	response, err := h.authService.ExchangeGoogleSession(request.AccessToken, request.Intent)
+	if err != nil {
+		httpx.Fail(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}

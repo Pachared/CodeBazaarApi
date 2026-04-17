@@ -39,6 +39,7 @@ func New(
 
 	mountAPI := func(group *gin.RouterGroup) {
 		group.POST("/auth/google/start", authHandler.StartGoogleAuth)
+		group.POST("/auth/google/session", authHandler.ExchangeGoogleSession)
 
 		group.GET("/products", productHandler.ListProducts)
 		group.GET("/products/featured", productHandler.ListFeaturedProducts)
@@ -51,6 +52,7 @@ func New(
 		group.POST("/checkout/orders", checkoutHandler.SubmitOrder)
 
 		group.POST("/seller/onboarding/google", sellerHandler.OpenSellerAccount)
+		group.POST("/seller/onboarding/github", sellerHandler.OpenSellerAccount)
 		group.POST("/seller/listings", sellerHandler.SubmitListing)
 		group.GET("/seller/orders", sellerHandler.ListSellerOrders)
 
